@@ -1,0 +1,56 @@
+name: Twitter → Instagram Bot
+
+on:
+  # Run 6 times a day at 3-hour intervals: 12am, 3am, 6am, 9am, 12pm, 3pm UTC
+  schedule:
+    - cron: "0 0,3,6,9,12,15 * * *"
+  # Allow manual trigger from the GitHub Actions UI for testing
+  workflow_dispatch:
+
+jobs:
+  post:
+    name: Scrape & Post
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write  # needed to commit processed_ids.txt back to repo
+
+    steps:
+      # ── Checkout ─────────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # ── Python ───────────────────────────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # ── Twitter cookies (stored as a GitHub Secret — paste twikit_cookies.json content) ──
+      - name: Write twikit_cookies.json
+        run: echo '${{ secrets.TWITTER_COOKIES }}' > twikit_cookies.json
+
+      # ── Run bot ──────────────────────────────────────────────────────────────
+      - name: Run bot
+        env:
+          IG_USER_ID:              ${{ secrets.IG_USER_ID }}
+          IG_ACCESS_TOKEN:         ${{ secrets.IG_ACCESS_TOKEN }}
+          MAX_POSTS_PER_RUN:       "1"
+          DEFAULT_CAPTION:         "#edits #viral"
+          TARGET_TWITTER_ACCOUNT:  "EditsGoesHard"
+          DRY_RUN:                 "false"
+        run: python main.py
+
+      # ── Persist state ─────────────────────────────────────────────────────────
+      - name: Commit updated processed_ids.txt
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name  "GitHub Actions Bot"
+          git add processed_ids.txt
+          git diff --staged --quiet || git commit -m "chore: update processed_ids.txt [skip ci]"
+          git push

@@ -1,0 +1,13 @@
+.env
+cookies.txt
+twikit_cookies.json
+accounts.db
+downloads/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
