@@ -5,10 +5,28 @@ Returns the absolute path of the downloaded MP4 file.
 """
 
 import os
+import json
 import yt_dlp
 
 DOWNLOADS_DIR = os.path.join(os.path.dirname(__file__), "downloads")
 os.makedirs(DOWNLOADS_DIR, exist_ok=True)
+
+
+def _generate_netscape_cookies(twikit_json_path: str, netscape_path: str) -> None:
+    """Convert twikit's {name: value} JSON to Netscape cookies.txt for yt-dlp."""
+    with open(twikit_json_path, "r", encoding="utf-8") as f:
+        cookies = json.load(f)
+    lines = [
+        "# Netscape HTTP Cookie File",
+        "# https://curl.se/docs/http-cookies.html",
+        "",
+    ]
+    for name, value in cookies.items():
+        # Domain, subdomains, path, secure, expiry, name, value
+        lines.append(f".x.com\tTRUE\t/\tTRUE\t9999999999\t{name}\t{value}")
+    with open(netscape_path, "w", encoding="utf-8", newline="\n") as f:
+        f.write("\n".join(lines) + "\n")
+    print(f"  Generated cookies.txt from twikit_cookies.json ({len(cookies)} cookies)")
 
 
 def download_video(tweet_url: str, tweet_id: str) -> str:
@@ -45,7 +63,16 @@ def download_video(tweet_url: str, tweet_id: str) -> str:
     if os.path.exists(cookies_file):
         ydl_opts["cookiefile"] = cookies_file
     else:
-        ydl_opts["cookiesfrombrowser"] = ("chrome",)
+        # CI: no cookies.txt — try to generate from twikit_cookies.json
+        twikit_json = os.path.join(os.path.dirname(__file__), "twikit_cookies.json")
+        if os.path.exists(twikit_json):
+            _generate_netscape_cookies(twikit_json, cookies_file)
+            ydl_opts["cookiefile"] = cookies_file
+        else:
+            raise RuntimeError(
+                "No cookies found! Place cookies.txt or twikit_cookies.json "
+                "in the project folder."
+            )
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(tweet_url, download=True)
